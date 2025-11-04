@@ -1,0 +1,31 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mkdir:*)",
+      "Bash(docker:*)",
+      "Bash(docker-compose:*)",
+      "Bash(npm:*)",
+      "Bash(cp:*)",
+      "Bash(pg_isready:*)",
+      "Bash(createdb:*)",
+      "Bash(npx prisma migrate dev:*)",
+      "Bash(npx prisma migrate reset:*)",
+      "Bash(dropdb:*)",
+      "Bash(rm:*)",
+      "Bash(mv:*)",
+      "Bash(npx prisma db seed:*)",
+      "Bash(lsof:*)",
+      "Bash(kill:*)",
+      "Bash(npx prisma db execute:*)",
+      "Bash(npx prisma migrate:*)",
+      "Bash(curl:*)",
+      "Bash(git init:*)",
+      "Bash(git remote add:*)",
+      "Bash(git add:*)",
+      "Bash(git push:*)",
+      "Bash(git rm:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

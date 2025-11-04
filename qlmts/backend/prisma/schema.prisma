@@ -1,0 +1,104 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String    @id @default(cuid())
+  email     String    @unique
+  password  String
+  name      String
+  role      String
+  isActive  Boolean   @default(true)
+  lastLogin DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}
+
+model Supplier {
+  id            String   @id @default(cuid())
+  code          String   @unique
+  name          String
+  contactPerson String?
+  email         String?
+  phone         String?
+  address       String?
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  heats         Heat[]
+}
+
+model Heat {
+  id            String   @id @default(cuid())
+  heatNo        String   @unique
+  supplierId    String
+  materialGrade String
+  receivedOn    DateTime
+  quantity      Float
+  unit          String
+  poNumber      String?
+  grnNumber     String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  supplier      Supplier @relation(fields: [supplierId], references: [id])
+  samples       Sample[]
+}
+
+model Sample {
+  id           String    @id @default(cuid())
+  code         String    @unique
+  sourceType   String
+  sourceId     String
+  priority     String    @default("NORMAL")
+  state        String    @default("DRAFT")
+  requestedBy  String
+  notes        String?
+  createdAt    DateTime  @default(now())
+  registeredAt DateTime?
+  completedAt  DateTime?
+  reports      Report[]
+  heat         Heat      @relation(fields: [sourceId], references: [id])
+  tests        Test[]
+}
+
+model Test {
+  id          String       @id @default(cuid())
+  sampleId    String
+  category    String
+  method      String
+  standard    String?
+  status      String       @default("PENDING")
+  startedAt   DateTime?
+  completedAt DateTime?
+  sample      Sample       @relation(fields: [sampleId], references: [id])
+  results     TestResult[]
+}
+
+model TestResult {
+  id        String   @id @default(cuid())
+  testId    String
+  parameter String
+  value     Float
+  unit      String
+  verdict   String
+  createdAt DateTime @default(now())
+  test      Test     @relation(fields: [testId], references: [id])
+}
+
+model Report {
+  id         String    @id @default(cuid())
+  reportNo   String    @unique
+  sampleId   String
+  status     String    @default("DRAFT")
+  fileUrl    String?
+  version    Int       @default(1)
+  checksum   String?
+  createdAt  DateTime  @default(now())
+  releasedAt DateTime?
+  sample     Sample    @relation(fields: [sampleId], references: [id])
+}

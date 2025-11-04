@@ -1,0 +1,339 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id              String           @id @default(cuid())
+  email           String           @unique
+  password        String
+  name            String
+  role            String
+  isActive        Boolean          @default(true)
+  lastLogin       DateTime?
+  certificateId   String?          // PKI certificate ID for e-signatures
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  signatures      ReportSignature[]
+  reportActivities ReportActivity[]
+}
+
+model Customer {
+  id                String            @id @default(cuid())
+  code              String            @unique
+  name              String
+  logo              String?           // URL to logo file
+  address           String?
+  contactEmails     String[]          // Array of email addresses for report distribution
+  defaultTemplateId String?
+  sapCode           String?
+  language          String            @default("EN")
+  disclaimerText    String?
+  samplingPlanLabel String?
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  templates         ReportTemplate[]
+  purchaseOrders    PurchaseOrder[]
+  generatedReports  GeneratedReport[]
+}
+
+model Supplier {
+  id            String   @id @default(cuid())
+  code          String   @unique
+  name          String
+  contactPerson String?
+  email         String?
+  phone         String?
+  address       String?
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  heats         Heat[]
+}
+
+model PurchaseOrder {
+  id           String   @id @default(cuid())
+  customerId   String
+  poNumber     String   @unique
+  lineNumber   String?
+  partNumber   String?
+  drawingRev   String?
+  description  String?
+  quantity     Float?
+  unit         String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  customer     Customer @relation(fields: [customerId], references: [id])
+  heats        Heat[]
+  generatedReports GeneratedReport[]
+}
+
+model Heat {
+  id                String    @id @default(cuid())
+  heatNo            String    @unique
+  supplierId        String
+  materialGrade     String
+  receivedOn        DateTime
+  quantity          Float
+  unit              String
+  poId              String?
+  grnNumber         String?
+  mtcNumber         String?    // Mill Test Certificate number
+  productionOrder   String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  supplier          Supplier  @relation(fields: [supplierId], references: [id])
+  purchaseOrder     PurchaseOrder? @relation(fields: [poId], references: [id])
+  samples           Sample[]
+  batches           Batch[]
+}
+
+model Batch {
+  id              String    @id @default(cuid())
+  batchNo         String    @unique
+  heatId          String
+  quantity        Float
+  unit            String
+  productionDate  DateTime?
+  status          String    @default("IN_PROCESS")
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  heat            Heat      @relation(fields: [heatId], references: [id])
+  samples         Sample[]
+  generatedReports GeneratedReport[]
+}
+
+model Sample {
+  id              String    @id @default(cuid())
+  code            String    @unique
+  sourceType      String    // "HEAT" or "BATCH"
+  heatId          String?
+  batchId         String?
+  priority        String    @default("NORMAL")
+  state           String    @default("DRAFT") // DRAFT, REGISTERED, IN_TEST, COMPLETED, APPROVED, RELEASED
+  requestedBy     String
+  notes           String?
+  createdAt       DateTime  @default(now())
+  registeredAt    DateTime?
+  completedAt     DateTime?
+  approvedAt      DateTime?
+  releasedAt      DateTime?
+  heat            Heat?     @relation(fields: [heatId], references: [id])
+  batch           Batch?    @relation(fields: [batchId], references: [id])
+  tests           Test[]
+  generatedReports GeneratedReport[]
+  deviations      Deviation[]
+}
+
+model Test {
+  id          String       @id @default(cuid())
+  sampleId    String
+  category    String       // CHEMISTRY, MECHANICAL, HARDNESS, IMPACT, NDT, HT
+  method      String
+  standard    String?
+  specVersion String?      // Version of specification used
+  status      String       @default("PENDING")
+  startedAt   DateTime?
+  completedAt DateTime?
+  sample      Sample       @relation(fields: [sampleId], references: [id])
+  results     TestResult[]
+  htCycles    HeatTreatmentCycle[]
+  ndtResults  NDTResult[]
+}
+
+model TestResult {
+  id         String   @id @default(cuid())
+  testId     String
+  parameter  String
+  minSpec    Float?
+  maxSpec    Float?
+  value      Float
+  unit       String
+  verdict    String   // PASS, FAIL, PASS_WITH_DEVIATION
+  precision  Int      @default(1) // Number of decimal places
+  specimenId String?  // For tracking individual specimens
+  createdAt  DateTime @default(now())
+  test       Test     @relation(fields: [testId], references: [id])
+}
+
+model HeatTreatmentCycle {
+  id             String   @id @default(cuid())
+  testId         String
+  cycleType      String   // NORMALIZING, QUENCHING, TEMPERING, etc.
+  temperature    Float
+  duration       Int      // in minutes
+  coolingMethod  String?
+  furnaceId      String?
+  chartUrl       String?  // URL to time/temperature chart
+  createdAt      DateTime @default(now())
+  test           Test     @relation(fields: [testId], references: [id])
+}
+
+model NDTResult {
+  id           String   @id @default(cuid())
+  testId       String
+  method       String   // UT, MT, PT, RT, ET
+  standard     String
+  class        String?
+  coverage     Float    // percentage
+  indications  Json?    // JSON array of indications with location, size, etc.
+  disposition  String   // ACCEPTABLE, REJECTABLE
+  mapImageUrl  String?  // URL to UT map or other visual
+  createdAt    DateTime @default(now())
+  test         Test     @relation(fields: [testId], references: [id])
+}
+
+model Deviation {
+  id             String   @id @default(cuid())
+  sampleId       String
+  parameter      String
+  originalValue  Float
+  deviatedValue  Float?
+  reason         String
+  approvedBy     String
+  concessionRef  String?  // Concession/waiver reference
+  status         String   @default("PENDING") // PENDING, APPROVED, REJECTED
+  createdAt      DateTime @default(now())
+  approvedAt     DateTime?
+  sample         Sample   @relation(fields: [sampleId], references: [id])
+}
+
+model ReportTemplate {
+  id              String           @id @default(cuid())
+  name            String
+  type            String           // COA, MTC, HT_REPORT, DISPATCH, PPAP, CHARPY, UT_MAP
+  customerId      String?
+  isDefault       Boolean          @default(false)
+  headerTemplate  String           // HTML/Handlebars template
+  bodyTemplate    String           // HTML/Handlebars template
+  footerTemplate  String           // HTML/Handlebars template
+  mergeFields     Json             // JSON schema of available merge fields
+  tableConfig     Json             // Configuration for table layouts and field ordering
+  pageConfig      Json             // Page size, margins, orientation
+  branding        Json?            // Logo positioning, colors, fonts
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  customer        Customer?        @relation(fields: [customerId], references: [id])
+  generatedReports GeneratedReport[]
+}
+
+model GeneratedReport {
+  id              String           @id @default(cuid())
+  reportNo        String           @unique
+  reportType      String           // COA, MTC, HT_REPORT, DISPATCH, etc.
+  version         String           @default("1.0")
+  revision        Int              @default(0)
+  isReissue       Boolean          @default(false)
+  reissueReason   String?
+  templateId      String
+  customerId      String
+  poId            String?
+  batchId         String?
+  sampleId        String?
+  status          String           @default("DRAFT") // DRAFT, PREVIEW, RELEASED, ARCHIVED
+  format          String           // PDF, DOCX, XLSX
+  fileUrl         String?
+  fileSize        Int?
+  checksum        String?          // SHA-256 hash
+  qrCode          String?          // QR code data
+  qrUrl           String?          // Verification URL
+  mergeData       Json             // Complete merge data used for generation
+  metadata        Json?            // Additional metadata
+  generatedAt     DateTime         @default(now())
+  releasedAt      DateTime?
+  archivedAt      DateTime?
+  expiresAt       DateTime?
+  template        ReportTemplate   @relation(fields: [templateId], references: [id])
+  customer        Customer         @relation(fields: [customerId], references: [id])
+  purchaseOrder   PurchaseOrder?   @relation(fields: [poId], references: [id])
+  batch           Batch?           @relation(fields: [batchId], references: [id])
+  sample          Sample?          @relation(fields: [sampleId], references: [id])
+  signatures      ReportSignature[]
+  activities      ReportActivity[]
+  distributions   ReportDistribution[]
+  
+  @@index([reportNo, version])
+  @@index([customerId, status])
+  @@index([releasedAt])
+}
+
+model ReportSignature {
+  id            String          @id @default(cuid())
+  reportId      String
+  userId        String
+  role          String          // QC_MANAGER, LAB_HEAD, CUSTOMER_REP, etc.
+  signatureType String          // PKI, SIMPLE, TIMESTAMP
+  signatureData String?         // Base64 encoded signature
+  certificate   String?         // X.509 certificate
+  timestamp     DateTime        @default(now())
+  ipAddress     String?
+  report        GeneratedReport @relation(fields: [reportId], references: [id])
+  user          User            @relation(fields: [userId], references: [id])
+  
+  @@index([reportId, userId])
+}
+
+model ReportActivity {
+  id         String          @id @default(cuid())
+  reportId   String
+  userId     String
+  action     String          // CREATED, PREVIEWED, EDITED, SIGNED, RELEASED, REISSUED, DOWNLOADED, EMAILED
+  details    Json?           // Additional action details
+  reason     String?         // For reissue, rejection, etc.
+  ipAddress  String?
+  userAgent  String?
+  timestamp  DateTime        @default(now())
+  report     GeneratedReport @relation(fields: [reportId], references: [id])
+  user       User            @relation(fields: [userId], references: [id])
+  
+  @@index([reportId, action])
+  @@index([userId, timestamp])
+}
+
+model ReportDistribution {
+  id           String          @id @default(cuid())
+  reportId     String
+  channel      String          // EMAIL, SAP, WEBHOOK, PORTAL, PRINT
+  recipient    String?         // Email address, SAP document ID, webhook URL, etc.
+  status       String          @default("PENDING") // PENDING, SENT, DELIVERED, FAILED
+  attempts     Int             @default(0)
+  lastAttempt  DateTime?
+  deliveredAt  DateTime?
+  errorMessage String?
+  metadata     Json?           // Channel-specific metadata
+  createdAt    DateTime        @default(now())
+  report       GeneratedReport @relation(fields: [reportId], references: [id])
+  
+  @@index([reportId, channel])
+  @@index([status, createdAt])
+}
+
+model ReportNumberSequence {
+  id         String   @id @default(cuid())
+  plant      String
+  year       Int
+  lastSeq    Int      @default(0)
+  prefix     String?  // Optional prefix like customer code
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  
+  @@unique([plant, year, prefix])
+}
+
+model ReportVerification {
+  id         String   @id @default(cuid())
+  reportNo   String
+  version    String
+  checksum   String
+  verifyCode String   @unique // Short code for QR/manual verification
+  accessCount Int     @default(0)
+  lastAccess DateTime?
+  createdAt  DateTime @default(now())
+  
+  @@index([reportNo, version])
+  @@index([verifyCode])
+}

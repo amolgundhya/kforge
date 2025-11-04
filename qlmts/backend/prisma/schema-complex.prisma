@@ -1,0 +1,514 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// User and Authentication
+model User {
+  id                String    @id @default(uuid())
+  email             String    @unique
+  password          String
+  name              String
+  role              UserRole
+  isActive          Boolean   @default(true)
+  lastLogin         DateTime?
+  refreshToken      String?
+  resetToken        String?
+  resetTokenExpiry  DateTime?
+  
+  // Audit fields
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  
+  // Relations
+  heatsCreated      Heat[]    @relation("HeatCreatedBy")
+  heatsUpdated      Heat[]    @relation("HeatUpdatedBy")
+  samplesCreated    Sample[]  @relation("SampleCreatedBy")
+  testsPerformed    Test[]    @relation("TestOperator")
+  approvals         Approval[]
+  auditLogs         AuditLog[]
+  
+  @@index([email])
+  @@index([role])
+}
+
+// Material Traceability
+model Heat {
+  id            String    @id @default(uuid()) @db.Uuid
+  heatNo        String    @unique @db.VarChar(50)
+  supplierId    String    @db.Uuid
+  materialGrade String    @db.VarChar(100)
+  receivedOn    DateTime  @db.Date
+  quantity      Decimal   @db.Decimal(10, 3)
+  unit          Unit
+  poNumber      String?   @db.VarChar(50)
+  grnNumber     String?   @db.VarChar(50)
+  mtcId         String?   @db.Uuid
+  
+  // Audit fields
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  createdById   String    @db.Uuid
+  updatedById   String?   @db.Uuid
+  
+  // Relations
+  supplier      Supplier  @relation(fields: [supplierId], references: [id])
+  mtc           MTC?      @relation(fields: [mtcId], references: [id])
+  batches       Batch[]
+  samples       Sample[]  @relation("SampleHeat")
+  createdBy     User      @relation("HeatCreatedBy", fields: [createdById], references: [id])
+  updatedBy     User?     @relation("HeatUpdatedBy", fields: [updatedById], references: [id])
+  
+  @@index([supplierId])
+  @@index([materialGrade])
+  @@index([receivedOn])
+  @@index([heatNo, supplierId])
+}
+
+model Batch {
+  id            String    @id @default(uuid()) @db.Uuid
+  batchNo       String    @db.VarChar(50)
+  heatId        String    @db.Uuid
+  quantity      Decimal   @db.Decimal(10, 3)
+  unit          Unit
+  location      String?   @db.VarChar(100)
+  splitParentId String?   @db.Uuid
+  
+  // Audit
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  
+  // Relations
+  heat          Heat      @relation(fields: [heatId], references: [id])
+  splitParent   Batch?    @relation("BatchSplit", fields: [splitParentId], references: [id])
+  splitChildren Batch[]   @relation("BatchSplit")
+  samples       Sample[]  @relation("SampleBatch")
+  
+  @@unique([batchNo, heatId])
+  @@index([heatId])
+}
+
+model Supplier {
+  id            String    @id @default(uuid()) @db.Uuid
+  code          String    @unique @db.VarChar(20)
+  name          String    @db.VarChar(200)
+  contactPerson String?   @db.VarChar(100)
+  email         String?   @db.VarChar(100)
+  phone         String?   @db.VarChar(20)
+  address       String?   @db.Text
+  isActive      Boolean   @default(true)
+  
+  // Audit
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  
+  // Relations
+  heats         Heat[]
+  mtcs          MTC[]
+  
+  @@index([code])
+  @@index([name])
+}
+
+model MTC {
+  id              String    @id @default(uuid())
+  supplierMtcNo   String    @db.VarChar(50)
+  supplierId      String    @db.Uuid
+  fileUrl         String
+  parsedData      Json?
+  uploadedAt      DateTime  @default(now())
+  isValid         Boolean   @default(true)
+  
+  // Relations
+  supplier        Supplier  @relation(fields: [supplierId], references: [id])
+  heats           Heat[]
+  
+  @@unique([supplierMtcNo, supplierId])
+  @@index([supplierId])
+}
+
+// Testing & Quality Control
+model Sample {
+  id            String        @id @default(uuid())
+  code          String        @unique @db.VarChar(20)
+  sourceType    SourceType
+  sourceId      String        @db.Uuid
+  testPlanId    String        @db.Uuid
+  priority      Priority      @default(NORMAL)
+  state         SampleState   @default(DRAFT)
+  requestedBy   String        @db.VarChar(100)
+  notes         String?       @db.Text
+  
+  // Audit
+  createdAt     DateTime      @default(now())
+  createdById   String        @db.Uuid
+  registeredAt  DateTime?
+  completedAt   DateTime?
+  
+  // Relations
+  heat          Heat?         @relation("SampleHeat", fields: [sourceId], references: [id], map: "Sample_heat_fkey")
+  batch         Batch?        @relation("SampleBatch", fields: [sourceId], references: [id], map: "Sample_batch_fkey")
+  testPlan      TestPlan      @relation(fields: [testPlanId], references: [id])
+  tests         Test[]
+  reports       Report[]
+  approvals     Approval[] @relation("SampleApproval")
+  createdBy     User          @relation("SampleCreatedBy", fields: [createdById], references: [id])
+  
+  @@index([state])
+  @@index([sourceType, sourceId])
+}
+
+model TestPlan {
+  id            String          @id @default(uuid())
+  name          String          @db.VarChar(100)
+  materialGrade String          @db.VarChar(100)
+  version       Int             @default(1)
+  isActive      Boolean         @default(true)
+  
+  // Audit
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  
+  // Relations
+  parameters    TestParameter[]
+  samples       Sample[]
+  
+  @@unique([name, version])
+  @@index([materialGrade])
+}
+
+model TestParameter {
+  id            String    @id @default(uuid()) @db.Uuid
+  testPlanId    String    @db.Uuid
+  category      TestCategory
+  parameter     String    @db.VarChar(50)
+  method        String    @db.VarChar(50)
+  standard      String?   @db.VarChar(50)
+  minLimit      Decimal?  @db.Decimal(12, 6)
+  maxLimit      Decimal?  @db.Decimal(12, 6)
+  targetValue   Decimal?  @db.Decimal(12, 6)
+  unit          String    @db.VarChar(20)
+  isMandatory   Boolean   @default(true)
+  
+  // Relations
+  testPlan      TestPlan  @relation(fields: [testPlanId], references: [id])
+  
+  @@index([testPlanId])
+}
+
+model Test {
+  id            String        @id @default(uuid())
+  sampleId      String        @db.Uuid
+  category      TestCategory
+  method        String        @db.VarChar(50)
+  standard      String?       @db.VarChar(50)
+  equipmentId   String?       @db.Uuid
+  operatorId    String        @db.Uuid
+  status        TestStatus    @default(PENDING)
+  
+  // Audit
+  startedAt     DateTime?
+  completedAt   DateTime?
+  
+  // Relations
+  sample        Sample        @relation(fields: [sampleId], references: [id])
+  equipment     Equipment?    @relation(fields: [equipmentId], references: [id])
+  operator      User          @relation("TestOperator", fields: [operatorId], references: [id])
+  results       TestResult[]
+  
+  @@index([sampleId])
+  @@index([status])
+}
+
+model TestResult {
+  id            String      @id @default(uuid())
+  testId        String      @db.Uuid
+  parameter     String      @db.VarChar(50)
+  value         Decimal     @db.Decimal(12, 6)
+  unit          String      @db.VarChar(20)
+  minLimit      Decimal?    @db.Decimal(12, 6)
+  maxLimit      Decimal?    @db.Decimal(12, 6)
+  targetValue   Decimal?    @db.Decimal(12, 6)
+  verdict       Verdict
+  
+  // Instrument data
+  source        DataSource  @default(MANUAL)
+  instrumentId  String?     @db.Uuid
+  rawData       Json?
+  
+  // Audit
+  createdAt     DateTime    @default(now())
+  modifiedAt    DateTime?
+  
+  // Relations
+  test          Test        @relation(fields: [testId], references: [id])
+  instrument    Equipment?  @relation(fields: [instrumentId], references: [id])
+  deviations    Deviation[]
+  
+  @@index([verdict])
+  @@index([testId, parameter])
+}
+
+model Equipment {
+  id              String        @id @default(uuid())
+  code            String        @unique @db.VarChar(50)
+  name            String        @db.VarChar(100)
+  type            EquipmentType
+  manufacturer    String?       @db.VarChar(100)
+  model           String?       @db.VarChar(100)
+  serialNumber    String?       @db.VarChar(100)
+  calibrationDue  DateTime?
+  isActive        Boolean       @default(true)
+  
+  // Audit
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  
+  // Relations
+  tests           Test[]
+  testResults     TestResult[]
+  calibrations    Calibration[]
+  
+  @@index([type])
+}
+
+model Calibration {
+  id              String    @id @default(uuid())
+  equipmentId     String    @db.Uuid
+  calibrationDate DateTime
+  nextDueDate     DateTime
+  certificateNo   String    @db.VarChar(50)
+  performedBy     String    @db.VarChar(100)
+  status          CalibrationStatus
+  documents       Json?
+  
+  // Relations
+  equipment       Equipment @relation(fields: [equipmentId], references: [id])
+  
+  @@index([equipmentId])
+}
+
+// Workflow & Reporting
+model Report {
+  id            String        @id @default(uuid())
+  reportNo      String        @unique @db.VarChar(50)
+  sampleId      String        @db.Uuid
+  templateId    String?       @db.Uuid
+  fileUrl       String?
+  version       Int           @default(1)
+  checksum      String?
+  status        ReportStatus  @default(DRAFT)
+  
+  // Audit
+  createdAt     DateTime      @default(now())
+  releasedAt    DateTime?
+  
+  // Relations
+  sample        Sample        @relation(fields: [sampleId], references: [id])
+  template      ReportTemplate? @relation(fields: [templateId], references: [id])
+  approvals     Approval[]    @relation("ReportApproval")
+  
+  @@index([status])
+  @@index([sampleId])
+}
+
+model ReportTemplate {
+  id            String    @id @default(uuid()) @db.Uuid
+  name          String    @db.VarChar(100)
+  type          TemplateType
+  customerId    String?   @db.Uuid
+  templateData  Json
+  isActive      Boolean   @default(true)
+  
+  // Audit
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  
+  // Relations
+  reports       Report[]
+  
+  @@index([type])
+}
+
+model Approval {
+  id            String        @id @default(uuid())
+  entityType    EntityType
+  entityId      String        @db.Uuid
+  stage         String        @db.VarChar(50)
+  approverId    String        @db.Uuid
+  action        ApprovalAction
+  comments      String?       @db.Text
+  signature     String?
+  timestamp     DateTime      @default(now())
+  
+  // Relations
+  approver      User          @relation(fields: [approverId], references: [id])
+  sample        Sample?       @relation("SampleApproval", fields: [entityId], references: [id], map: "Approval_sample_fkey")
+  report        Report?       @relation("ReportApproval", fields: [entityId], references: [id], map: "Approval_report_fkey")
+  
+  @@index([entityType, entityId])
+  @@index([approverId])
+}
+
+model Deviation {
+  id            String        @id @default(uuid())
+  testResultId  String        @db.Uuid
+  reason        String        @db.Text
+  approvedBy    String?       @db.Uuid
+  capaRef       String?       @db.VarChar(50)
+  riskAssessment String?      @db.Text
+  status        DeviationStatus @default(PENDING)
+  
+  // Audit
+  createdAt     DateTime      @default(now())
+  resolvedAt    DateTime?
+  
+  // Relations
+  testResult    TestResult    @relation(fields: [testResultId], references: [id])
+  
+  @@index([status])
+}
+
+model AuditLog {
+  id            String    @id @default(uuid()) @db.Uuid
+  entityType    String    @db.VarChar(50)
+  entityId      String    @db.Uuid
+  action        String    @db.VarChar(50)
+  fieldName     String?   @db.VarChar(50)
+  oldValue      String?   @db.Text
+  newValue      String?   @db.Text
+  userId        String    @db.Uuid
+  ipAddress     String?   @db.VarChar(45)
+  userAgent     String?   @db.Text
+  timestamp     DateTime  @default(now())
+  
+  // Relations
+  user          User      @relation(fields: [userId], references: [id])
+  
+  @@index([entityType, entityId])
+  @@index([userId])
+  @@index([timestamp])
+}
+
+// Enums
+enum UserRole {
+  ADMIN
+  QC_MANAGER
+  LAB_TECH
+  STORES
+  PRODUCTION
+  AUDITOR
+  CUSTOMER_VIEW
+}
+
+enum Unit {
+  KG
+  MT
+  LBS
+  PCS
+}
+
+enum SourceType {
+  HEAT
+  BATCH
+  FINISHED
+}
+
+enum Priority {
+  NORMAL
+  URGENT
+  CRITICAL
+}
+
+enum SampleState {
+  DRAFT
+  REGISTERED
+  IN_PROGRESS
+  IN_REVIEW
+  APPROVED
+  RELEASED
+  REJECTED
+  ON_HOLD
+}
+
+enum TestCategory {
+  CHEMICAL
+  MECHANICAL
+  NDT
+  DIMENSIONAL
+  VISUAL
+}
+
+enum TestStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum Verdict {
+  PASS
+  FAIL
+  WARNING
+  PENDING
+}
+
+enum DataSource {
+  MANUAL
+  INSTRUMENT
+  CALCULATED
+  IMPORTED
+}
+
+enum EquipmentType {
+  SPECTROMETER
+  UTM
+  HARDNESS_TESTER
+  IMPACT_TESTER
+  NDT_EQUIPMENT
+  DIMENSIONAL
+  OTHER
+}
+
+enum CalibrationStatus {
+  VALID
+  EXPIRED
+  DUE
+}
+
+enum ReportStatus {
+  DRAFT
+  IN_REVIEW
+  APPROVED
+  RELEASED
+  REJECTED
+}
+
+enum TemplateType {
+  STANDARD
+  CUSTOMER
+  INTERNAL
+}
+
+enum EntityType {
+  SAMPLE
+  REPORT
+  TEST
+}
+
+enum ApprovalAction {
+  APPROVE
+  REJECT
+  REQUEST_CHANGES
+}
+
+enum DeviationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  RESOLVED
+}
