@@ -100,6 +100,46 @@ Uses Prisma ORM with PostgreSQL. Main entities:
 - **TestResult**: Test outcomes with verdicts
 - **Report**: Generated quality reports
 
+### ⚠️ IMPORTANT: Prisma Schema Selection
+
+The backend has **three Prisma schema files** with different feature sets:
+
+1. **`schema.prisma`** (Basic)
+   - Core entities for basic material traceability
+   - Models: User, Supplier, Heat, Sample, Test, TestResult, Report
+
+2. **`schema-report-automation.prisma`** (Extended - **RECOMMENDED**)
+   - Everything from basic schema PLUS:
+   - GeneratedReport, ReportTemplate, ReportSignature, ReportActivity
+   - ReportDistribution, ReportVerification, ReportNumberSequence
+   - Customer, PurchaseOrder, Batch models
+   - **Use this for: Full report automation and quality control workflows**
+
+3. **`schema-complex.prisma`** (Complete)
+   - Most comprehensive version with advanced traceability and audit features
+   - **Use this for: Production environments with full compliance requirements**
+
+#### Setup Instructions
+
+To use the extended report automation features (recommended):
+
+```bash
+cd qlmts/backend
+
+# Copy the report-automation schema as the main schema
+cp prisma/schema-report-automation.prisma prisma/schema.prisma
+
+# Generate Prisma client with extended models
+npx prisma generate
+
+# Run migrations
+npx prisma migrate dev
+```
+
+**Common Error:** If you see `Property 'generatedReport' does not exist on type 'PrismaService'` or similar errors, you need to use the extended schema and regenerate the Prisma client.
+
+See `qlmts/backend/SETUP.md` for detailed setup instructions.
+
 ## API Endpoints (Backend port 4000)
 
 - **Auth**: `/api/auth/login`, `/api/auth/register`, `/api/auth/me`
