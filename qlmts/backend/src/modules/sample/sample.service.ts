@@ -14,11 +14,24 @@ export class SampleService {
   async createSample(createSampleDto: CreateSampleDto, userId: string) {
     // Validate source exists based on type
     if (createSampleDto.sourceType === 'HEAT') {
+      if (!createSampleDto.heatId) {
+        throw new BadRequestException('Heat ID is required for HEAT source type');
+      }
       const heat = await this.prisma.heat.findUnique({
-        where: { id: createSampleDto.sourceId },
+        where: { id: createSampleDto.heatId },
       });
       if (!heat) {
         throw new BadRequestException('Invalid heat ID provided');
+      }
+    } else if (createSampleDto.sourceType === 'BATCH') {
+      if (!createSampleDto.batchId) {
+        throw new BadRequestException('Batch ID is required for BATCH source type');
+      }
+      const batch = await this.prisma.batch.findUnique({
+        where: { id: createSampleDto.batchId },
+      });
+      if (!batch) {
+        throw new BadRequestException('Invalid batch ID provided');
       }
     }
 
@@ -72,7 +85,11 @@ export class SampleService {
       where.sourceType = query.sourceType;
     }
     if (query.sourceId) {
-      where.sourceId = query.sourceId;
+      // Support legacy sourceId parameter by checking both heatId and batchId
+      where.OR = [
+        { heatId: query.sourceId },
+        { batchId: query.sourceId }
+      ];
     }
     if (query.priority) {
       where.priority = query.priority;
@@ -108,9 +125,9 @@ export class SampleService {
     // For HEAT source type, fetch heat information
     const enrichedSamples = await Promise.all(
       samples.map(async (sample) => {
-        if (sample.sourceType === 'HEAT') {
+        if (sample.sourceType === 'HEAT' && sample.heatId) {
           const heat = await this.prisma.heat.findUnique({
-            where: { id: sample.sourceId },
+            where: { id: sample.heatId },
             select: {
               heatNo: true,
               materialGrade: true,
@@ -119,6 +136,19 @@ export class SampleService {
           return {
             ...sample,
             heat,
+          };
+        } else if (sample.sourceType === 'BATCH' && sample.batchId) {
+          const batch = await this.prisma.batch.findUnique({
+            where: { id: sample.batchId },
+            select: {
+              batchNo: true,
+              quantity: true,
+              unit: true,
+            },
+          });
+          return {
+            ...sample,
+            batch,
           };
         }
         return sample;
@@ -152,11 +182,11 @@ export class SampleService {
       throw new NotFoundException('Sample not found');
     }
 
-    // Fetch source information if HEAT
+    // Fetch source information if HEAT or BATCH
     let enrichedSample = sample;
-    if (sample.sourceType === 'HEAT') {
+    if (sample.sourceType === 'HEAT' && sample.heatId) {
       const heat = await this.prisma.heat.findUnique({
-        where: { id: sample.sourceId },
+        where: { id: sample.heatId },
         select: {
           heatNo: true,
           materialGrade: true,

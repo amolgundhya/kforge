@@ -613,7 +613,7 @@ export class ReportGenerationService {
     return match ? match[1] : '';
   }
 
-  private async getNextVersion(reportNo: string): string {
+  private async getNextVersion(reportNo: string): Promise<string> {
     const lastReport = await this.prisma.generatedReport.findFirst({
       where: { reportNo },
       orderBy: { version: 'desc' },

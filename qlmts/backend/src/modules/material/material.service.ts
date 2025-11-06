@@ -83,7 +83,9 @@ export class MaterialService {
       }
     }
     if (query.poNumber) {
-      where.poNumber = { contains: query.poNumber, mode: 'insensitive' };
+      where.purchaseOrder = {
+        poNumber: { contains: query.poNumber, mode: 'insensitive' }
+      };
     }
     if (query.grnNumber) {
       where.grnNumber = { contains: query.grnNumber, mode: 'insensitive' };
@@ -181,7 +183,7 @@ export class MaterialService {
 
     // Check if heat has any samples
     const samplesCount = await this.prisma.sample.count({
-      where: { sourceId: id },
+      where: { heatId: id },
     });
 
     if (samplesCount > 0) {
