@@ -18,29 +18,39 @@ export enum Priority {
 }
 
 export class CreateSampleDto {
-  @ApiProperty({ 
+  @ApiProperty({
     enum: SourceType,
     description: 'Type of source material'
   })
   @IsEnum(SourceType)
   sourceType: SourceType;
 
-  @ApiProperty({ 
+  @ApiPropertyOptional({
     example: 'cm1abc123def456',
-    description: 'Source material ID (heat, product, or batch ID) - CUID format'
+    description: 'Heat ID (required if sourceType is HEAT) - CUID format'
   })
-  @IsString({ message: 'Source ID must be a string' })
-  @Length(24, 30, { message: 'Invalid source ID format' })
-  sourceId: string;
+  @IsOptional()
+  @IsString({ message: 'Heat ID must be a string' })
+  @Length(24, 30, { message: 'Invalid heat ID format' })
+  heatId?: string;
 
-  @ApiProperty({ 
+  @ApiPropertyOptional({
+    example: 'cm1abc123def456',
+    description: 'Batch ID (required if sourceType is BATCH) - CUID format'
+  })
+  @IsOptional()
+  @IsString({ message: 'Batch ID must be a string' })
+  @Length(24, 30, { message: 'Invalid batch ID format' })
+  batchId?: string;
+
+  @ApiProperty({
     enum: Priority,
     description: 'Sample priority level'
   })
   @IsEnum(Priority)
   priority: Priority;
 
-  @ApiProperty({ 
+  @ApiProperty({
     example: 'lab.tech@qlmts.com',
     description: 'Email of person requesting the sample'
   })
@@ -49,7 +59,7 @@ export class CreateSampleDto {
   @Transform(({ value }) => value?.trim())
   requestedBy: string;
 
-  @ApiPropertyOptional({ 
+  @ApiPropertyOptional({
     example: 'Standard quality verification for production release',
     description: 'Additional notes about the sample'
   })

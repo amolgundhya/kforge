@@ -75,10 +75,7 @@ export class PdfGeneratorService {
           font,
           color: rgb(0.8, 0.8, 0.8),
           opacity: 0.3,
-          rotate: {
-            angle: -45,
-            origin: { x: width / 2, y: height / 2 },
-          },
+          rotate: { angle: -45 },
         });
       });
 

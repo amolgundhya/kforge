@@ -85,8 +85,8 @@ async function main() {
       receivedOn: new Date('2024-01-15'),
       quantity: 2500.0,
       unit: 'KG',
-      poNumber: 'PO-2024-1001',
       grnNumber: 'GRN-2024-5678',
+      mtcNumber: 'MTC-2024-001',
     },
   });
 
@@ -98,8 +98,8 @@ async function main() {
       receivedOn: new Date('2024-01-20'),
       quantity: 1800.0,
       unit: 'KG',
-      poNumber: 'PO-2024-1002',
       grnNumber: 'GRN-2024-5679',
+      mtcNumber: 'MTC-2024-002',
     },
   });
 
@@ -110,7 +110,7 @@ async function main() {
     data: {
       code: 'S-2024-000001',
       sourceType: 'HEAT',
-      sourceId: heat1.id,
+      heatId: heat1.id,
       priority: 'NORMAL',
       requestedBy: 'production@qlmts.com',
       notes: 'Standard quality verification for production release',
@@ -200,17 +200,6 @@ async function main() {
 
   console.log('✅ Test results created');
 
-  // Create a report
-  await prisma.report.create({
-    data: {
-      reportNo: 'RPT-2024-000001',
-      sampleId: sample1.id,
-      status: 'DRAFT',
-    },
-  });
-
-  console.log('✅ Report created');
-
   console.log('🎉 Database seeding completed successfully!');
   console.log('');
   console.log('👥 Default users created:');
@@ -223,7 +212,6 @@ async function main() {
   console.log('   - 2 Heat records');
   console.log('   - 1 Sample with completed tests');
   console.log('   - 6 Test results (chemical + mechanical)');
-  console.log('   - 1 Report record');
 }
 
 main()
